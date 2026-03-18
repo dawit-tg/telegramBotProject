@@ -6,10 +6,10 @@ import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
-     ConfigModule.forRoot({
+    ConfigModule.forRoot({
       isGlobal: true,
     }),
-    
+
     TypeOrmModule.forFeature([Order]),
     TelegramModule,
 
@@ -18,7 +18,7 @@ import { ConfigModule } from '@nestjs/config';
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
       synchronize: true,
-    });
+    }), 
   ],
 })
 export class AppModule {}
