@@ -1,0 +1,138 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TelegramService = void 0;
+const common_1 = require("@nestjs/common");
+const node_telegram_bot_api_1 = __importDefault(require("node-telegram-bot-api"));
+const typeorm_1 = require("@nestjs/typeorm");
+const typeorm_2 = require("typeorm");
+const order_entity_1 = require("../order/order.entity");
+const users = {};
+const PAYMENT_NUMBER = "0905754653";
+let TelegramService = class TelegramService {
+    orderRepo;
+    bot;
+    constructor(orderRepo) {
+        this.orderRepo = orderRepo;
+    }
+    onModuleInit() {
+        this.bot = new node_telegram_bot_api_1.default('8617287568:AAG0afbFWv7qpAp8hMKm3bI31T3enQSRiHc', { polling: true });
+        this.bot.on('message', async (msg) => {
+            const chatId = msg.chat.id;
+            const text = msg.text?.toLowerCase();
+            if (!text)
+                return;
+            if (!users[chatId]) {
+                users[chatId] = { step: 0 };
+            }
+            const user = users[chatId];
+            if (text === '/start') {
+                users[chatId] = { step: 1 };
+                return this.bot.sendMessage(chatId, "☕ Welcome!\nChoose coffee:\n1. Dilla (300 birr/kg)\n2. Yirgachafe (400 birr/kg)");
+            }
+            if (user.step === 1) {
+                if (text === '1') {
+                    user.product = 'Dilla';
+                    user.price = 300;
+                }
+                else if (text === '2') {
+                    user.product = 'Yirgachafe';
+                    user.price = 400;
+                }
+                else {
+                    return this.bot.sendMessage(chatId, "Choose: 1 or 2");
+                }
+                user.step = 2;
+                return this.bot.sendMessage(chatId, "How many kg?");
+            }
+            if (user.step === 2) {
+                const qty = Number(text);
+                if (isNaN(qty) || qty <= 0) {
+                    return this.bot.sendMessage(chatId, "Enter valid number");
+                }
+                user.quantity = qty;
+                user.total = qty * user.price;
+                user.step = 3;
+                return this.bot.sendMessage(chatId, "Send phone number");
+            }
+            if (user.step === 3) {
+                user.phone = text;
+                user.step = 4;
+                return this.bot.sendMessage(chatId, "Enter your city");
+            }
+            if (user.step === 4) {
+                user.location = text;
+                user.step = 5;
+                return this.bot.sendMessage(chatId, `🧾 Order Summary:
+Coffee: ${user.product}
+Quantity: ${user.quantity} kg
+Total: ${user.total} birr
+Phone: ${user.phone}
+Location: ${user.location}
+
+Type 1 confirm to place order`);
+            }
+            if (user.step === 5) {
+                if (text === '1') {
+                    const order = this.orderRepo.create({
+                        product: user.product,
+                        quantity: user.quantity,
+                        total: user.total,
+                        phone: user.phone,
+                        location: user.location,
+                    });
+                    await this.orderRepo.save(order);
+                    await this.bot.sendMessage(chatId, `💰 Payment Required
+
+Please send:
+${user.total} birr
+
+To Telebirr number:
+${PAYMENT_NUMBER}
+
+After payment, type "paid"`);
+                    user.step = 6;
+                    return;
+                }
+                else {
+                    return this.bot.sendMessage(chatId, 'Type "confirm" to place order');
+                }
+            }
+            if (user.step === 6) {
+                if (text === 'paid') {
+                    await this.bot.sendMessage(chatId, `✅ Payment received!
+
+🚚 Your order will be delivered soon.
+Thank you ☕`);
+                    console.log("PAID ORDER:", user);
+                    users[chatId] = { step: 0 };
+                    return;
+                }
+                else {
+                    return this.bot.sendMessage(chatId, 'Type "paid" after payment');
+                }
+            }
+        });
+    }
+};
+exports.TelegramService = TelegramService;
+exports.TelegramService = TelegramService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(order_entity_1.Order)),
+    __metadata("design:paramtypes", [typeorm_2.Repository])
+], TelegramService);
+//# sourceMappingURL=telegram.service.js.map
